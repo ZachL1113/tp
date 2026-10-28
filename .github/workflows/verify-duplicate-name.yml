@@ -1,0 +1,48 @@
+name: Verify duplicate names on master f9067bc
+
+on:
+  push:
+    branches:
+      - verify-duplicate-name-f9067bc-20261028
+
+permissions:
+  contents: read
+
+jobs:
+  running-app-reproduction:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the exact product master commit
+        uses: actions/checkout@v7
+        with:
+          ref: f9067bcc6f7df215dac7249fa9d034b227e41b4a
+      - name: Check out the isolated GUI observation harness
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          path: verification-harness
+          sparse-checkout: .verification
+      - name: Set up JDK 25 with JavaFX
+        uses: actions/setup-java@v5
+        with:
+          distribution: zulu
+          java-version: '25'
+          java-package: jdk+fx
+      - name: Run the actual app and submit the reproduction commands through its UI
+        run: |
+          test "$(git rev-parse HEAD)" = "f9067bcc6f7df215dac7249fa9d034b227e41b4a"
+          git diff --exit-code -- src/main docs build.gradle
+          mkdir -p src/test/java/seedu/address/repro
+          cp verification-harness/.verification/NameDuplicateGuiReproTest.java src/test/java/seedu/address/repro/
+          xvfb-run --auto-servernum ./gradlew test --tests seedu.address.repro.NameDuplicateGuiReproTest --info
+          git diff --exit-code -- src/main docs build.gradle
+      - name: Preserve GUI screenshots, command transcript and saved app data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: duplicate-name-gui-repro-f9067bc
+          path: |
+            build/gui-repro-evidence/
+            build/test-results/test/
+          if-no-files-found: warn
